@@ -1,0 +1,776 @@
+Project Directory Structure (excluding node_modules):
+./
+├── README.md
+├── eslint.config.js
+├── generate_code_snapshot.sh*
+├── index.html
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── project_code.txt
+├── public/
+│   └── vite.svg
+├── src/
+│   ├── App.css
+│   ├── App.jsx
+│   ├── assets/
+│   │   └── react.svg
+│   ├── components/
+│   │   └── ui/
+│   │       ├── badge.jsx
+│   │       ├── button.jsx
+│   │       ├── card.jsx
+│   │       ├── dialog.jsx
+│   │       ├── input.jsx
+│   │       ├── pagination.jsx
+│   │       └── select.jsx
+│   ├── index.css
+│   ├── lib/
+│   │   └── utils.js
+│   ├── main.jsx
+│   └── pages/
+│       └── SuperheroSearchPage.jsx
+├── tailwind.config.js
+└── vite.config.js
+
+
+==== Code Files ====
+
+
+==== File: ./tailwind.config.js ====
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: ["class"],
+  content: [
+    './pages/**/*.{js,jsx}',
+    './components/**/*.{js,jsx}',
+    './app/**/*.{js,jsx}',
+    './src/**/*.{js,jsx}',
+  ],
+  prefix: "",
+  theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: {
+        "2xl": "1400px",
+      },
+    },
+    extend: {
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
+    },
+  },
+  plugins: [require("tailwindcss-animate")],
+}
+
+
+==== File: ./vite.config.js ====
+import path from 'path'
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+})
+
+
+==== File: ./eslint.config.js ====
+import js from '@eslint/js'
+import globals from 'globals'
+import react from 'eslint-plugin-react'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+
+export default [
+  { ignores: ['dist'] },
+  {
+    files: ['**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
+    settings: { react: { version: '18.3' } },
+    plugins: {
+      react,
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      ...react.configs.recommended.rules,
+      ...react.configs['jsx-runtime'].rules,
+      ...reactHooks.configs.recommended.rules,
+      'react/jsx-no-target-blank': 'off',
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
+    },
+  },
+]
+
+
+
+==== File: ./postcss.config.js ====
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+
+
+
+==== File: ./src/components/ui/dialog.jsx ====
+import * as React from "react"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
+import { X } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+const Dialog = DialogPrimitive.Root
+const DialogTrigger = DialogPrimitive.Trigger
+
+const DialogPortal = DialogPrimitive.Portal
+
+const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    className={cn(
+      "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      className
+    )}
+    {...props}
+  />
+))
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
+
+const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+))
+DialogContent.displayName = DialogPrimitive.Content.displayName
+
+const DialogHeader = ({ className, ...props }) => (
+  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+)
+DialogHeader.displayName = "DialogHeader"
+
+const DialogTitle = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+))
+DialogTitle.displayName = DialogPrimitive.Title.displayName
+
+export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle }
+
+
+
+==== File: ./src/components/ui/input.jsx ====
+import * as React from "react"
+import { cn } from "@/lib/utils"
+
+const Input = React.forwardRef(({ className, type, ...props }, ref) => {
+  return (
+    <input
+      type={type}
+      className={cn(
+        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+      ref={ref}
+      {...props}
+    />
+  )
+})
+Input.displayName = "Input"
+
+export { Input }
+
+
+
+==== File: ./src/components/ui/select.jsx ====
+import * as React from "react"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import { Check, ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+const Select = SelectPrimitive.Root
+const SelectGroup = SelectPrimitive.Group
+const SelectValue = SelectPrimitive.Value
+
+const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) => (
+  <SelectPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <SelectPrimitive.Icon asChild>
+      <ChevronDown className="h-4 w-4 opacity-50" />
+    </SelectPrimitive.Icon>
+  </SelectPrimitive.Trigger>
+))
+SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
+
+const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => (
+  <SelectPrimitive.Portal>
+    <SelectPrimitive.Content
+      ref={ref}
+      className={cn(
+        "relative z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        position === "popper" &&
+          "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+        className
+      )}
+      position={position}
+      {...props}
+    >
+      <SelectPrimitive.Viewport className="p-1">
+        {children}
+      </SelectPrimitive.Viewport>
+    </SelectPrimitive.Content>
+  </SelectPrimitive.Portal>
+))
+SelectContent.displayName = SelectPrimitive.Content.displayName
+
+const SelectItem = React.forwardRef(({ className, children, ...props }, ref) => (
+  <SelectPrimitive.Item
+    ref={ref}
+    className={cn(
+      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      className
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <SelectPrimitive.ItemIndicator>
+        <Check className="h-4 w-4" />
+      </SelectPrimitive.ItemIndicator>
+    </span>
+    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+  </SelectPrimitive.Item>
+))
+SelectItem.displayName = SelectPrimitive.Item.displayName
+
+export { Select, SelectGroup, SelectValue, SelectTrigger, SelectContent, SelectItem }
+
+
+
+==== File: ./src/components/ui/button.jsx ====
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva } from "class-variance-authority"
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+const Button = React.forwardRef(({ className, variant, size, asChild = false, ...props }, ref) => {
+  const Comp = asChild ? Slot : "button"
+  return (
+    <Comp
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      {...props}
+    />
+  )
+})
+Button.displayName = "Button"
+
+export { Button, buttonVariants }
+
+
+
+==== File: ./src/components/ui/badge.jsx ====
+import * as React from "react"
+import { cva } from "class-variance-authority"
+import { cn } from "@/lib/utils"
+
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive:
+          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
+        outline: "text-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+const Badge = React.forwardRef(({ className, variant, ...props }, ref) => (
+  <div ref={ref} className={cn(badgeVariants({ variant }), className)} {...props} />
+))
+Badge.displayName = "Badge"
+
+export { Badge, badgeVariants }
+
+
+
+==== File: ./src/components/ui/card.jsx ====
+import * as React from "react"
+import { cn } from "@/lib/utils"
+
+const Card = React.forwardRef(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}
+    {...props}
+  />
+))
+Card.displayName = "Card"
+
+const CardHeader = React.forwardRef(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef(({ className, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn("text-2xl font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
+
+const CardContent = React.forwardRef(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
+
+export { Card, CardHeader, CardTitle, CardContent }
+
+
+==== File: ./src/components/ui/pagination.jsx ====
+import * as React from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "./button"
+
+const Pagination = ({ className, currentPage, totalPages, onPageChange, ...props }) => {
+  return (
+    <nav
+      role="navigation"
+      aria-label="pagination"
+      className={cn("mx-auto flex w-full justify-center", className)}
+      {...props}
+    >
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="outline"
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(currentPage - 1)}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="sr-only">Previous Page</span>
+        </Button>
+        <div className="text-sm font-medium">
+          Page {currentPage} of {totalPages}
+        </div>
+        <Button
+          variant="outline"
+          disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+        >
+          <ChevronRight className="h-4 w-4" />
+          <span className="sr-only">Next Page</span>
+        </Button>
+      </div>
+    </nav>
+  )
+}
+
+export { Pagination }
+
+
+
+==== File: ./src/main.jsx ====
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.jsx'
+import SuperheroSearchPage from './App.jsx'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+
+
+
+==== File: ./src/App.jsx ====
+// src/App.jsx
+import React from "react";
+import SuperheroSearchPage from "@/pages/SuperheroSearchPage";  // Import the new page
+
+function App() {
+  return (
+    <div>
+      <SuperheroSearchPage />
+    </div>
+  );
+}
+
+export default App;
+
+
+
+==== File: ./src/lib/utils.js ====
+import { clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+ 
+export function cn(...inputs) {
+  return twMerge(clsx(inputs))
+}
+
+
+==== File: ./src/pages/SuperheroSearchPage.jsx ====
+// src/pages/SuperheroSearchPage.jsx
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+
+// Utility for truncating text
+const truncate = (str, length) => str.length > length ? `${str.substring(0, length)}...` : str;
+
+// Search Input Component
+const SearchInput = ({ onSearch, placeholder }) => {
+  const [query, setQuery] = useState('');
+
+  const handleSearch = () => {
+    onSearch(query.trim());
+  };
+
+  return (
+    <div className="flex w-full max-w-md space-x-2">
+      <Input 
+        type="text" 
+        placeholder={placeholder}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="flex-grow"
+      />
+      <Button 
+        onClick={handleSearch} 
+        className="bg-blue-600 hover:bg-blue-700"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        Search
+      </Button>
+    </div>
+  );
+};
+
+// Superhero Card Component
+const SuperheroCard = ({ superhero }) => {
+  return (
+    <Card className="w-full max-w-xs transition-all hover:scale-105 hover:shadow-lg">
+      <CardHeader className="p-4 pb-0">
+        <img 
+          src={superhero.image.url} 
+          alt={superhero.name} 
+          className="w-full h-64 object-cover rounded-t-lg"
+        />
+      </CardHeader>
+      <CardContent className="p-4">
+        <CardTitle className="text-xl font-bold mb-2">
+          {truncate(superhero.name, 20)}
+        </CardTitle>
+        <div className="space-y-2">
+          <Badge variant="secondary">
+            ⭐ Power: {superhero.powerstats.power}
+          </Badge>
+          <Badge variant="outline">
+            Alignment: {superhero.biography.alignment}
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Movie Card Component
+const MovieCard = ({ movie }) => {
+  return (
+    <Card className="w-full max-w-xs transition-all hover:scale-105 hover:shadow-lg">
+      <CardHeader className="p-4 pb-0">
+        <img 
+          src={movie.Poster} 
+          alt={movie.Title} 
+          className="w-full h-64 object-cover rounded-t-lg"
+        />
+      </CardHeader>
+      <CardContent className="p-4">
+        <CardTitle className="text-xl font-bold mb-2">
+          {truncate(movie.Title, 20)}
+        </CardTitle>
+        <div className="space-y-2">
+          <Badge variant="secondary">
+            🎬 Year: {movie.Year}
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Advanced Search Dialog
+const AdvancedSearchDialog = ({ onAdvancedSearch }) => {
+  const [filters, setFilters] = useState({
+    powerLevel: '',
+    alignment: '',
+    yearFrom: '',
+    yearTo: ''
+  });
+
+  const handleSearch = () => {
+    onAdvancedSearch(filters);
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          </svg>
+          Advanced Search
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Advanced Search Filters</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label>Power Level</label>
+            <Select 
+              onValueChange={(val) => setFilters({...filters, powerLevel: val})}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select Power Level" />
+              </SelectTrigger>
+              <SelectContent>
+                {['Low', 'Medium', 'High', 'Super'].map(level => (
+                  <SelectItem key={level} value={level}>
+                    {level}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label>Alignment</label>
+            <Select 
+              onValueChange={(val) => setFilters({...filters, alignment: val})}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select Alignment" />
+              </SelectTrigger>
+              <SelectContent>
+                {['good', 'bad', 'neutral'].map(align => (
+                  <SelectItem key={align} value={align}>
+                    {align}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label>Movie Year</label>
+            <Input 
+              type="number" 
+              placeholder="From" 
+              className="col-span-1"
+              onChange={(e) => setFilters({...filters, yearFrom: e.target.value})}
+            />
+            <Input 
+              type="number" 
+              placeholder="To" 
+              className="col-span-1"
+              onChange={(e) => setFilters({...filters, yearTo: e.target.value})}
+            />
+          </div>
+        </div>
+        <Button onClick={handleSearch} className="w-full">
+          Apply Filters
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Main Search Page Component
+const SuperheroSearchPage = () => {
+  const [superheroes, setSuperheroes] = useState([]);
+  const [movies, setMovies] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const handleSearch = async (query) => {
+    try {
+      // Implement API calls here
+      // const superheroResults = await api.searchSuperheroes(query);
+      // const movieResults = await api.searchMovies(query);
+
+      // Mock data for demonstration
+      setSuperheroes(/* superheroResults.data.results || */ []);
+      setMovies(/* movieResults.data.Search || */ []);
+      setTotalPages(5); // Mock pagination
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    }
+  };
+
+  const handleAdvancedSearch = (filters) => {
+    // Implement advanced search logic
+    console.log('Advanced Filters:', filters);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8 flex justify-between items-center">
+          <h1 className="text-4xl font-bold text-gray-800">
+            Superhero Search Engine
+          </h1>
+          <AdvancedSearchDialog onAdvancedSearch={handleAdvancedSearch} />
+        </div>
+
+        <div className="mb-8 flex justify-center">
+          <SearchInput 
+            onSearch={handleSearch} 
+            placeholder="Search superheroes or movies..."
+          />
+        </div>
+
+        {/* Superheroes Section */}
+        <section className="mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-700">
+            Superheroes
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {superheroes.map((hero) => (
+              <SuperheroCard key={hero.id} superhero={hero} />
+            ))}
+          </div>
+        </section>
+
+        {/* Movies Section */}
+        <section>
+          <h2 className="text-2xl font-semibold mb-4 text-gray-700">
+            Related Movies
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {movies.map((movie) => (
+              <MovieCard key={movie.imdbID} movie={movie} />
+            ))}
+          </div>
+        </section>
+
+        {/* Pagination */}
+        <div className="mt-8 flex justify-center">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SuperheroSearchPage;
+
+
+
