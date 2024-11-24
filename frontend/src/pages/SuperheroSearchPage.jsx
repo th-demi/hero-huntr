@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 
+// Truncate text helper function
 const truncate = (str, length) => str.length > length ? `${str.substring(0, length)}...` : str;
 
 const SearchInput = ({ onSearch, placeholder }) => {
@@ -103,10 +104,28 @@ const SuperheroSearchPage = () => {
   const [currentQuery, setCurrentQuery] = useState('');
   const ITEMS_PER_PAGE = 12;
 
+  // Cache for search results
+  const [cachedResults, setCachedResults] = useState({});
+
+  useEffect(() => {
+    // Reset search results when the query changes
+    setSearchResults([]);
+    setTotalPages(1);
+    setCurrentPage(1);
+  }, [currentQuery]);
+
   const fetchResults = async (query, page) => {
+    // Check if data is already in cache
+    if (cachedResults[query] && cachedResults[query][page]) {
+      // If cached, use the data directly
+      setSearchResults(cachedResults[query][page].results);
+      setTotalPages(cachedResults[query][page].totalPages);
+      return;
+    }
+
     try {
       setLoading(true);
-  
+
       const response = await fetch(
         `http://localhost:8080/api/search?query=${query}&page=${page}&limit=${ITEMS_PER_PAGE}`
       );
@@ -114,18 +133,31 @@ const SuperheroSearchPage = () => {
       if (!response.ok) {
         throw new Error("Failed to fetch search results");
       }
-  
+
       const data = await response.json();
-  
+
       // Combine the paginated results
       const combined = [
         ...(data.superheroes || []).map(hero => ({ ...hero, type: 'superhero' })),
         ...(data.movies || []).map(movie => ({ ...movie, type: 'movie' }))
       ];
-  
+
+      // Update the state with new results
       setSearchResults(combined);
       setTotalPages(data.totalPages);
-  
+
+      // Update the cache with new results for the given query and page
+      setCachedResults((prevCache) => ({
+        ...prevCache,
+        [query]: {
+          ...prevCache[query],
+          [page]: {
+            results: combined,
+            totalPages: data.totalPages
+          }
+        }
+      }));
+
     } catch (err) {
       console.error("Error fetching data:", err);
       setSearchResults([]);
@@ -134,7 +166,6 @@ const SuperheroSearchPage = () => {
       setLoading(false);
     }
   };
-  
 
   const handleSearch = async (query) => {
     setCurrentQuery(query);
@@ -146,7 +177,6 @@ const SuperheroSearchPage = () => {
     setCurrentPage(page);
     await fetchResults(currentQuery, page);
   };
-  
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">

@@ -1,16 +1,69 @@
 package handlers
 
 import (
+	"encoding/json"
 	"hero-hunter/config"
 	"hero-hunter/models"
 	"hero-hunter/services"
 	"log"
+	"math"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// LevenshteinDistance calculates the Levenshtein distance between two strings
+func LevenshteinDistance(a, b string) int {
+	lena, lenb := len(a), len(b)
+	dp := make([][]int, lena+1)
+
+	for i := range dp {
+		dp[i] = make([]int, lenb+1)
+	}
+
+	for i := 0; i <= lena; i++ {
+		dp[i][0] = i
+	}
+	for j := 0; j <= lenb; j++ {
+		dp[0][j] = j
+	}
+
+	for i := 1; i <= lena; i++ {
+		for j := 1; j <= lenb; j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			dp[i][j] = int(math.Min(
+				float64(dp[i-1][j-1]+cost),
+				math.Min(
+					float64(dp[i-1][j]+1),
+					float64(dp[i][j-1]+1),
+				),
+			))
+		}
+	}
+
+	return dp[lena][lenb]
+}
+
+// Load superhero names from hero_names.json
+func loadSuperheroNames() ([]string, error) {
+	file, err := os.ReadFile("./handlers/hero_names.json")
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	err = json.Unmarshal(file, &names)
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
 
 func SearchHandler(c *gin.Context) {
 	// Get the query, page, and limit from the query parameters
@@ -58,10 +111,62 @@ func SearchHandler(c *gin.Context) {
 		return
 	}
 
-	// Fetch data from external APIs if not found in cache
+	// If no superheroes found for the query, calculate Levenshtein distance
 	superheroes := services.FetchSuperheroes(query)
-	movies := services.FetchMovies(query)
+	if len(superheroes) == 0 {
+		// Load superhero names from JSON file
+		superheroNames, err := loadSuperheroNames()
+		if err != nil {
+			log.Printf("Error loading superhero names: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error loading superhero names."})
+			return
+		}
 
+		// Find the closest match using Levenshtein distance
+		closestMatch := query
+		minDistance := math.MaxInt
+
+		for _, name := range superheroNames {
+			distance := LevenshteinDistance(query, name)
+			if distance < minDistance {
+				minDistance = distance
+				closestMatch = name
+			}
+		}
+
+		log.Printf("Closest match for query '%s': %s", query, closestMatch)
+
+		// Fetch superheroes and movies for the closest match
+		superheroes = services.FetchSuperheroes(closestMatch)
+		movies := services.FetchMovies(closestMatch)
+
+		// Save to cache
+		cacheData := &models.CacheData{
+			Query:       closestMatch,
+			Superheroes: superheroes,
+			Movies:      movies,
+		}
+		services.SetCacheData(closestMatch, cacheData)
+
+		// Save to MongoDB
+		_, err = collection.InsertOne(config.MongoCtx, cacheData)
+		if err != nil {
+			log.Printf("Error inserting data into MongoDB: %v", err)
+		}
+
+		// Paginate the combined results
+		paginatedData := paginateCombined(superheroes, movies, page, limit)
+		totalItems := len(superheroes) + len(movies)
+		c.JSON(http.StatusOK, models.SearchResponse{
+			Superheroes: paginatedData.Superheroes,
+			Movies:      paginatedData.Movies,
+			TotalPages:  calculateTotalPages(totalItems, limit),
+		})
+		return
+	}
+
+	// If superheroes were found directly, proceed with paginating and returning the results
+	movies := services.FetchMovies(query)
 	if len(superheroes) > 0 || len(movies) > 0 {
 		cacheData := &models.CacheData{
 			Query:       query,
@@ -79,7 +184,6 @@ func SearchHandler(c *gin.Context) {
 		}
 
 		// Paginate the combined results
-		log.Println("Calling paginateCombined function...")
 		paginatedData := paginateCombined(superheroes, movies, page, limit)
 		totalItems := len(superheroes) + len(movies)
 		c.JSON(http.StatusOK, models.SearchResponse{
