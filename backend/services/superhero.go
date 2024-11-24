@@ -62,7 +62,5 @@ func FetchSuperheroes(query string) []models.Superhero {
 		}
 	}
 
-	log.Printf("Fetched %d superheroes", len(superheroes))
-	// Return the list of superheroes
 	return superheroes
 }

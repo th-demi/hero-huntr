@@ -20,7 +20,7 @@ const Pagination = ({ className, currentPage, totalPages, onPageChange, ...props
           <ChevronLeft className="h-4 w-4" />
           <span className="sr-only">Previous Page</span>
         </Button>
-        <div className="text-sm font-medium">
+        <div className="text-sm font-medium text-black">
           Page {currentPage} of {totalPages}
         </div>
         <Button
