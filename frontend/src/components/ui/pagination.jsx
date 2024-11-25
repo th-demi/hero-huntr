@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "./Button"
+import { Button } from "./button"
 
 const Pagination = ({ className, currentPage, totalPages, onPageChange, ...props }) => {
   return (
