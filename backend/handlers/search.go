@@ -29,6 +29,28 @@ func SearchHandler(c *gin.Context) {
 		limit = 12
 	}
 
+	// Get the optional filters: powerMin, powerMax, and alignment
+	powerMinStr := c.DefaultQuery("powerMin", "")
+	powerMaxStr := c.DefaultQuery("powerMax", "")
+	alignment := c.DefaultQuery("alignment", "")
+
+	// Convert powerMin and powerMax to integers if provided
+	var powerMin, powerMax int
+	if powerMinStr != "" {
+		powerMin, err = strconv.Atoi(powerMinStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid powerMin value"})
+			return
+		}
+	}
+	if powerMaxStr != "" {
+		powerMax, err = strconv.Atoi(powerMaxStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid powerMax value"})
+			return
+		}
+	}
+
 	// Check Redis cache for the query
 	closestMatchQuery, found := services.GetCacheClosestMatch(query)
 	if found {
@@ -41,8 +63,10 @@ func SearchHandler(c *gin.Context) {
 	cacheData, found := services.GetCacheData(query)
 	if found {
 		log.Println("Cache hit. Returning cached data.")
-		paginatedData := paginateCombined(cacheData.Superheroes, cacheData.Movies, page, limit)
-		totalItems := len(cacheData.Superheroes) + len(cacheData.Movies)
+		// Apply filters to the cached superheroes
+		filteredSuperheroes := filterSuperheroes(cacheData.Superheroes, powerMin, powerMax, alignment)
+		paginatedData := paginateCombined(filteredSuperheroes, cacheData.Movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(cacheData.Movies)
 		c.JSON(http.StatusOK, models.SearchResponse{
 			Superheroes: paginatedData.Superheroes,
 			Movies:      paginatedData.Movies,
@@ -58,8 +82,10 @@ func SearchHandler(c *gin.Context) {
 	if err == nil {
 		log.Println("MongoDB hit. Returning data from MongoDB.")
 		services.SetCacheData(query, &mongoData)
-		paginatedData := paginateCombined(mongoData.Superheroes, mongoData.Movies, page, limit)
-		totalItems := len(mongoData.Superheroes) + len(mongoData.Movies)
+		// Apply filters to the MongoDB superheroes
+		filteredSuperheroes := filterSuperheroes(mongoData.Superheroes, powerMin, powerMax, alignment)
+		paginatedData := paginateCombined(filteredSuperheroes, mongoData.Movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(mongoData.Movies)
 		c.JSON(http.StatusOK, models.SearchResponse{
 			Superheroes: paginatedData.Superheroes,
 			Movies:      paginatedData.Movies,
@@ -100,10 +126,13 @@ func SearchHandler(c *gin.Context) {
 		superheroes = services.FetchSuperheroes(closestMatch)
 		movies := services.FetchMovies(closestMatch)
 
+		// Apply filters to the superheroes
+		filteredSuperheroes := filterSuperheroes(superheroes, powerMin, powerMax, alignment)
+
 		// Save to cache
 		cacheData := &models.CacheData{
 			Query:       closestMatch,
-			Superheroes: superheroes,
+			Superheroes: filteredSuperheroes,
 			Movies:      movies,
 		}
 		services.SetCacheData(closestMatch, cacheData)
@@ -115,8 +144,8 @@ func SearchHandler(c *gin.Context) {
 		}
 
 		// Paginate the combined results
-		paginatedData := paginateCombined(superheroes, movies, page, limit)
-		totalItems := len(superheroes) + len(movies)
+		paginatedData := paginateCombined(filteredSuperheroes, movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(movies)
 		c.JSON(http.StatusOK, models.SearchResponse{
 			Superheroes: paginatedData.Superheroes,
 			Movies:      paginatedData.Movies,
@@ -128,9 +157,12 @@ func SearchHandler(c *gin.Context) {
 	// If superheroes were found directly, proceed with paginating and returning the results
 	movies := services.FetchMovies(query)
 	if len(superheroes) > 0 || len(movies) > 0 {
+		// Apply filters to the superheroes
+		filteredSuperheroes := filterSuperheroes(superheroes, powerMin, powerMax, alignment)
+
 		cacheData := &models.CacheData{
 			Query:       query,
-			Superheroes: superheroes,
+			Superheroes: filteredSuperheroes,
 			Movies:      movies,
 		}
 
@@ -144,8 +176,8 @@ func SearchHandler(c *gin.Context) {
 		}
 
 		// Paginate the combined results
-		paginatedData := paginateCombined(superheroes, movies, page, limit)
-		totalItems := len(superheroes) + len(movies)
+		paginatedData := paginateCombined(filteredSuperheroes, movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(movies)
 		c.JSON(http.StatusOK, models.SearchResponse{
 			Superheroes: paginatedData.Superheroes,
 			Movies:      paginatedData.Movies,
@@ -158,4 +190,27 @@ func SearchHandler(c *gin.Context) {
 			TotalPages:  0,
 		})
 	}
+}
+
+// filterSuperheroes filters the list of superheroes based on powerMin, powerMax, and alignment
+// filterSuperheroes filters the list of superheroes based on powerMin, powerMax, and alignment
+func filterSuperheroes(superheroes []models.Superhero, powerMin, powerMax int, alignment string) []models.Superhero {
+	var filtered []models.Superhero
+	for _, hero := range superheroes {
+		// Convert hero.Power to an integer (if it can be converted)
+		power, err := strconv.Atoi(hero.Power)
+		if err != nil {
+			// If conversion fails, skip this superhero or handle the error accordingly
+			log.Printf("Invalid power value for superhero '%s': %s", hero.Name, hero.Power)
+			continue
+		}
+
+		// Apply the filters
+		if (powerMin == 0 || power >= powerMin) && (powerMax == 0 || power <= powerMax) {
+			if alignment == "" || hero.Alignment == alignment {
+				filtered = append(filtered, hero)
+			}
+		}
+	}
+	return filtered
 }

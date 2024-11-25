@@ -135,21 +135,29 @@ const SuperheroSearchPage = () => {
       return;
     }
   
-    // Destructure filters with default values if they don't exist
+    // Destructure filters with default values
     const { power = [0, 100], alignment = '' } = filters;
   
-    // Construct the query string manually
+    // Construct query parameters manually
     const params = new URLSearchParams({
       query: query,
       page: page,
-      limit: ITEMS_PER_PAGE,
-      powerMin: power[0], // Minimum power value
-      powerMax: power[1], // Maximum power value
-      alignment: alignment || '' // If alignment is not provided, pass an empty string
+      limit: ITEMS_PER_PAGE
     });
   
+    // Only add powerMin and powerMax if power range is different from the default [0, 100]
+    if (power[0] !== 0 || power[1] !== 100) {
+      params.set('powerMin', power[0]);
+      params.set('powerMax', power[1]);
+    }
+  
+    // Only add alignment if it's not empty
+    if (alignment) {
+      params.set('alignment', alignment);
+    }
+  
     const url = `http://localhost:8080/api/search?${params.toString()}`;
-    
+  
     console.log('Search URL:', url);  // Debugging: log the URL to verify it's correct
   
     // Check if data is already in cache
@@ -198,6 +206,7 @@ const SuperheroSearchPage = () => {
       setLoading(false);
     }
   };
+  
 
   const handleSearch = async (query) => {
     setCurrentQuery(query);
@@ -262,7 +271,9 @@ const SuperheroSearchPage = () => {
               <DialogHeader>
                 <DialogTitle className="text-lg font-semibold text-black">Advanced Search Filters</DialogTitle>
               </DialogHeader>
-
+              <div id="dialog-description" className="text-sm text-gray-600">
+                Use the sliders and options to filter your search results based on power level and alignment.
+              </div>
               <div className="space-y-6">
                 {/* Power Slider */}
                 <div className="flex flex-col space-y-2">
