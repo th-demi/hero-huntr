@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
+import AdvancedSearchDialog from "@/components/ui/AdvancedSearchDialog";
 
 // Truncate text helper function
 const truncate = (str, length) => str.length > length ? `${str.substring(0, length)}...` : str;
@@ -102,22 +103,30 @@ const SuperheroSearchPage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentQuery, setCurrentQuery] = useState('');
+  const [filters, setFilters] = useState({}); // For advanced filters
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false); // Control dialog visibility
   const ITEMS_PER_PAGE = 12;
 
   // Cache for search results
   const [cachedResults, setCachedResults] = useState({});
 
   useEffect(() => {
-    // Reset search results when the query changes
+    // Reset search results when the query or filters change
     setSearchResults([]);
     setTotalPages(1);
     setCurrentPage(1);
-  }, [currentQuery]);
+  }, [currentQuery, filters]);
 
-  const fetchResults = async (query, page) => {
+  const fetchResults = async (query, page, filters) => {
+    if (!query.trim()) {
+      // If no query is provided, do not fetch results
+      return;
+    }
+    const filterParams = new URLSearchParams(filters).toString();
+    const url = `http://localhost:8080/api/search?query=${query}&page=${page}&limit=${ITEMS_PER_PAGE}&${filterParams}`;
+
     // Check if data is already in cache
-    if (cachedResults[query] && cachedResults[query][page]) {
-      // If cached, use the data directly
+    if (cachedResults[query] && cachedResults[query][page] && cachedResults[query][page].filters === filters) {
       setSearchResults(cachedResults[query][page].results);
       setTotalPages(cachedResults[query][page].totalPages);
       return;
@@ -126,9 +135,7 @@ const SuperheroSearchPage = () => {
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `http://localhost:8080/api/search?query=${query}&page=${page}&limit=${ITEMS_PER_PAGE}`
-      );
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error("Failed to fetch search results");
@@ -153,7 +160,8 @@ const SuperheroSearchPage = () => {
           ...prevCache[query],
           [page]: {
             results: combined,
-            totalPages: data.totalPages
+            totalPages: data.totalPages,
+            filters
           }
         }
       }));
@@ -170,12 +178,19 @@ const SuperheroSearchPage = () => {
   const handleSearch = async (query) => {
     setCurrentQuery(query);
     setCurrentPage(1); // Reset to first page
-    await fetchResults(query, 1);
+    await fetchResults(query, 1, filters);
   };
 
   const handlePageChange = async (page) => {
     setCurrentPage(page);
-    await fetchResults(currentQuery, page);
+    await fetchResults(currentQuery, page, filters);
+  };
+
+  const handleAdvancedSearch = (newFilters) => {
+    setFilters(newFilters);
+    setCurrentPage(1); // Reset to first page when filters change
+    setShowAdvancedSearch(false); // Close the dialog after applying filters
+    fetchResults(currentQuery, 1, newFilters);
   };
 
   return (
@@ -189,6 +204,15 @@ const SuperheroSearchPage = () => {
           <SearchInput
             onSearch={handleSearch}
             placeholder="Search superheroes or movies..."
+          />
+        </div>
+
+        {/* Advanced Search Dialog */}
+        <div className="mb-8 flex justify-center">
+          <AdvancedSearchDialog 
+            onAdvancedSearch={handleAdvancedSearch} 
+            isOpen={showAdvancedSearch} 
+            onClose={() => setShowAdvancedSearch(false)} 
           />
         </div>
 

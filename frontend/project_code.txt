@@ -17,6 +17,7 @@ Project Directory Structure (excluding node_modules):
 │   │   └── react.svg
 │   ├── components/
 │   │   └── ui/
+│   │       ├── AdvancedSearchDialog.jsx
 │   │       ├── badge.jsx
 │   │       ├── button.jsx
 │   │       ├── card.jsx
@@ -426,7 +427,7 @@ export { Card, CardHeader, CardTitle, CardContent }
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "./button"
+import { Button } from "./Button"
 
 const Pagination = ({ className, currentPage, totalPages, onPageChange, ...props }) => {
   return (
@@ -445,7 +446,7 @@ const Pagination = ({ className, currentPage, totalPages, onPageChange, ...props
           <ChevronLeft className="h-4 w-4" />
           <span className="sr-only">Previous Page</span>
         </Button>
-        <div className="text-sm font-medium">
+        <div className="text-sm font-medium text-black">
           Page {currentPage} of {totalPages}
         </div>
         <Button
@@ -462,6 +463,10 @@ const Pagination = ({ className, currentPage, totalPages, onPageChange, ...props
 }
 
 export { Pagination }
+
+
+
+==== File: ./src/components/ui/AdvancedSearchDialog.jsx ====
 
 
 
@@ -507,25 +512,23 @@ export function cn(...inputs) {
 
 
 ==== File: ./src/pages/SuperheroSearchPage.jsx ====
-// src/pages/SuperheroSearchPage.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
 
-// Utility for truncating text
+// Truncate text helper function
 const truncate = (str, length) => str.length > length ? `${str.substring(0, length)}...` : str;
 
-// Search Input Component
 const SearchInput = ({ onSearch, placeholder }) => {
   const [query, setQuery] = useState('');
 
   const handleSearch = () => {
-    onSearch(query.trim());
+    if (query.trim()) {
+      onSearch(query.trim());
+    }
   };
 
   return (
@@ -535,11 +538,13 @@ const SearchInput = ({ onSearch, placeholder }) => {
         placeholder={placeholder}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
         className="flex-grow"
       />
       <Button 
         onClick={handleSearch} 
         className="bg-blue-600 hover:bg-blue-700"
+        disabled={!query.trim()} // Disable the button if the query is empty
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -550,27 +555,28 @@ const SearchInput = ({ onSearch, placeholder }) => {
   );
 };
 
-// Superhero Card Component
 const SuperheroCard = ({ superhero }) => {
+  const heroKey = superhero._id?.$oid || `${superhero.name}-${superhero.alignment}`;
+  
   return (
-    <Card className="w-full max-w-xs transition-all hover:scale-105 hover:shadow-lg">
+    <Card key={heroKey} className="w-full max-w-xs transition-all hover:scale-105 hover:shadow-xl bg-red-100">
       <CardHeader className="p-4 pb-0">
         <img 
-          src={superhero.image.url} 
-          alt={superhero.name} 
+          src={superhero.image}
+          alt={superhero.name || 'Unknown Hero'}
           className="w-full h-64 object-cover rounded-t-lg"
         />
       </CardHeader>
       <CardContent className="p-4">
-        <CardTitle className="text-xl font-bold mb-2">
-          {truncate(superhero.name, 20)}
+        <CardTitle className="text-xl font-bold mb-2 text-black">
+          {truncate(superhero.name || 'Unknown Hero', 20)}
         </CardTitle>
-        <div className="space-y-2">
+        <div className="space-y-2 text-black">
           <Badge variant="secondary">
-            ⭐ Power: {superhero.powerstats.power}
+            ⭐ Power: {superhero.power || "N/A"}
           </Badge>
           <Badge variant="outline">
-            Alignment: {superhero.biography.alignment}
+            Alignment: {superhero.alignment || "N/A"}
           </Badge>
         </div>
       </CardContent>
@@ -578,24 +584,25 @@ const SuperheroCard = ({ superhero }) => {
   );
 };
 
-// Movie Card Component
 const MovieCard = ({ movie }) => {
+  const movieKey = movie.Title ? movie.Title : `${movie.Title || 'Unknown Movie'}-${movie.Year || 'N/A'}`;
+
   return (
-    <Card className="w-full max-w-xs transition-all hover:scale-105 hover:shadow-lg">
+    <Card key={movieKey} className="w-full max-w-xs transition-all hover:scale-105 hover:shadow-xl bg-blue-100">
       <CardHeader className="p-4 pb-0">
         <img 
-          src={movie.Poster} 
-          alt={movie.Title} 
+          src={movie.Poster || '/default-poster.jpg'}
+          alt={movie.Title || 'Unknown Movie'}
           className="w-full h-64 object-cover rounded-t-lg"
         />
       </CardHeader>
       <CardContent className="p-4">
-        <CardTitle className="text-xl font-bold mb-2">
-          {truncate(movie.Title, 20)}
+        <CardTitle className="text-xl font-bold mb-2 text-black">
+          {truncate(movie.Title || 'Unknown Movie', 20)}
         </CardTitle>
-        <div className="space-y-2">
+        <div className="space-y-2 text-black">
           <Badge variant="secondary">
-            🎬 Year: {movie.Year}
+            🎬 Year: {movie.Year || "N/A"}
           </Badge>
         </div>
       </CardContent>
@@ -603,168 +610,135 @@ const MovieCard = ({ movie }) => {
   );
 };
 
-// Advanced Search Dialog
-const AdvancedSearchDialog = ({ onAdvancedSearch }) => {
-  const [filters, setFilters] = useState({
-    powerLevel: '',
-    alignment: '',
-    yearFrom: '',
-    yearTo: ''
-  });
-
-  const handleSearch = () => {
-    onAdvancedSearch(filters);
-  };
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
-          Advanced Search
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Advanced Search Filters</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label>Power Level</label>
-            <Select 
-              onValueChange={(val) => setFilters({...filters, powerLevel: val})}
-            >
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Select Power Level" />
-              </SelectTrigger>
-              <SelectContent>
-                {['Low', 'Medium', 'High', 'Super'].map(level => (
-                  <SelectItem key={level} value={level}>
-                    {level}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label>Alignment</label>
-            <Select 
-              onValueChange={(val) => setFilters({...filters, alignment: val})}
-            >
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Select Alignment" />
-              </SelectTrigger>
-              <SelectContent>
-                {['good', 'bad', 'neutral'].map(align => (
-                  <SelectItem key={align} value={align}>
-                    {align}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label>Movie Year</label>
-            <Input 
-              type="number" 
-              placeholder="From" 
-              className="col-span-1"
-              onChange={(e) => setFilters({...filters, yearFrom: e.target.value})}
-            />
-            <Input 
-              type="number" 
-              placeholder="To" 
-              className="col-span-1"
-              onChange={(e) => setFilters({...filters, yearTo: e.target.value})}
-            />
-          </div>
-        </div>
-        <Button onClick={handleSearch} className="w-full">
-          Apply Filters
-        </Button>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-// Main Search Page Component
 const SuperheroSearchPage = () => {
-  const [superheroes, setSuperheroes] = useState([]);
-  const [movies, setMovies] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [currentQuery, setCurrentQuery] = useState('');
+  const ITEMS_PER_PAGE = 12;
 
-  const handleSearch = async (query) => {
+  // Cache for search results
+  const [cachedResults, setCachedResults] = useState({});
+
+  useEffect(() => {
+    // Reset search results when the query changes
+    setSearchResults([]);
+    setTotalPages(1);
+    setCurrentPage(1);
+  }, [currentQuery]);
+
+  const fetchResults = async (query, page) => {
+    // Check if data is already in cache
+    if (cachedResults[query] && cachedResults[query][page]) {
+      // If cached, use the data directly
+      setSearchResults(cachedResults[query][page].results);
+      setTotalPages(cachedResults[query][page].totalPages);
+      return;
+    }
+
     try {
-      // Implement API calls here
-      // const superheroResults = await api.searchSuperheroes(query);
-      // const movieResults = await api.searchMovies(query);
+      setLoading(true);
 
-      // Mock data for demonstration
-      setSuperheroes(/* superheroResults.data.results || */ []);
-      setMovies(/* movieResults.data.Search || */ []);
-      setTotalPages(5); // Mock pagination
+      const response = await fetch(
+        `http://localhost:8080/api/search?query=${query}&page=${page}&limit=${ITEMS_PER_PAGE}`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch search results");
+      }
+
+      const data = await response.json();
+
+      // Combine the paginated results
+      const combined = [
+        ...(data.superheroes || []).map(hero => ({ ...hero, type: 'superhero' })),
+        ...(data.movies || []).map(movie => ({ ...movie, type: 'movie' }))
+      ];
+
+      // Update the state with new results
+      setSearchResults(combined);
+      setTotalPages(data.totalPages);
+
+      // Update the cache with new results for the given query and page
+      setCachedResults((prevCache) => ({
+        ...prevCache,
+        [query]: {
+          ...prevCache[query],
+          [page]: {
+            results: combined,
+            totalPages: data.totalPages
+          }
+        }
+      }));
+
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error("Error fetching data:", err);
+      setSearchResults([]);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleAdvancedSearch = (filters) => {
-    // Implement advanced search logic
-    console.log('Advanced Filters:', filters);
+  const handleSearch = async (query) => {
+    setCurrentQuery(query);
+    setCurrentPage(1); // Reset to first page
+    await fetchResults(query, 1);
+  };
+
+  const handlePageChange = async (page) => {
+    setCurrentPage(page);
+    await fetchResults(currentQuery, page);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex justify-between items-center">
-          <h1 className="text-4xl font-bold text-gray-800">
-            Superhero Search Engine
-          </h1>
-          <AdvancedSearchDialog onAdvancedSearch={handleAdvancedSearch} />
+        <div className="mb-8 flex justify-center items-center">
+          <h1 className="text-4xl font-bold text-gray-800">Hero Huntr</h1>
         </div>
 
         <div className="mb-8 flex justify-center">
-          <SearchInput 
-            onSearch={handleSearch} 
+          <SearchInput
+            onSearch={handleSearch}
             placeholder="Search superheroes or movies..."
           />
         </div>
 
-        {/* Superheroes Section */}
-        <section className="mb-8">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-700">
-            Superheroes
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {superheroes.map((hero) => (
-              <SuperheroCard key={hero.id} superhero={hero} />
-            ))}
-          </div>
-        </section>
+        {loading ? (
+          <div className="flex justify-center">Loading...</div>
+        ) : (
+          <>
+            <section className="mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {searchResults.map((item, index) => (
+                  item.type === 'superhero' ? (
+                    <SuperheroCard 
+                      key={`${item._id?.$oid || item.name}-${index}`} 
+                      superhero={item} 
+                    />
+                  ) : (
+                    <MovieCard 
+                      key={`${item.imdbID || item.Title}-${index}`} 
+                      movie={item} 
+                    />
+                  )
+                ))}
+              </div>
+            </section>
 
-        {/* Movies Section */}
-        <section>
-          <h2 className="text-2xl font-semibold mb-4 text-gray-700">
-            Related Movies
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {movies.map((movie) => (
-              <MovieCard key={movie.imdbID} movie={movie} />
-            ))}
-          </div>
-        </section>
-
-        {/* Pagination */}
-        <div className="mt-8 flex justify-center">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-        </div>
+            {totalPages > 1 && searchResults.length > 0 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
