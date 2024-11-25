@@ -81,6 +81,14 @@ func SearchHandler(c *gin.Context) {
 	}
 
 	// Check Redis cache for the query
+	closestMatchQuery, found := services.GetCacheClosestMatch(query)
+	if found {
+		// If a closest match exists in Redis, update the query to the closest match
+		log.Printf("Found closest match in Redis for query '%s': %s", query, closestMatchQuery)
+		query = closestMatchQuery
+	}
+
+	// Check Redis cache for the query
 	cacheData, found := services.GetCacheData(query)
 	if found {
 		log.Println("Cache hit. Returning cached data.")
@@ -135,6 +143,9 @@ func SearchHandler(c *gin.Context) {
 		}
 
 		log.Printf("Closest match for query '%s': %s", query, closestMatch)
+
+		// Store the closest match in Redis with the actual query
+		services.SetCacheClosestMatch(query, closestMatch)
 
 		// Fetch superheroes and movies for the closest match
 		superheroes = services.FetchSuperheroes(closestMatch)

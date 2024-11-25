@@ -44,3 +44,36 @@ func SetCacheData(query string, data *models.CacheData) {
 	}
 	config.Rdb.Set(ctx, cacheKey, string(cacheDataJSON), 10*time.Minute)
 }
+func GetCacheClosestMatch(query string) (string, bool) {
+	// Redis key for closest match
+	redisKey := "closest_match:" + query
+
+	// Fetch from Redis
+	val, err := config.Rdb.Get(context.Background(), redisKey).Result()
+	if err == redis.Nil {
+		// If the key doesn't exist in Redis
+		return "", false
+	} else if err != nil {
+		log.Printf("Error fetching from Redis: %v", err)
+		return "", false
+	}
+
+	// Return the closest match
+	return val, true
+}
+
+// SetCacheClosestMatch stores the closest match for the query in Redis
+func SetCacheClosestMatch(query, closestMatch string) error {
+	// Redis key for closest match
+	redisKey := "closest_match:" + query
+
+	// Store the closest match in Redis
+	err := config.Rdb.Set(context.Background(), redisKey, closestMatch, 24*time.Hour).Err()
+	if err != nil {
+		log.Printf("Error storing closest match in Redis: %v", err)
+		return err
+	}
+
+	// Successfully stored
+	return nil
+}
