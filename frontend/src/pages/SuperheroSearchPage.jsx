@@ -4,7 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
-import AdvancedSearchDialog from "@/components/ui/AdvancedSearchDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/Slider";
+ // Assuming this is a custom slider component
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 // Truncate text helper function
 const truncate = (str, length) => str.length > length ? `${str.substring(0, length)}...` : str;
@@ -103,8 +112,11 @@ const SuperheroSearchPage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentQuery, setCurrentQuery] = useState('');
-  const [filters, setFilters] = useState({}); // For advanced filters
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false); // Control dialog visibility
+  const [filters, setFilters] = useState({
+    power: [0, 100],
+    alignment: '', // 'good', 'neutral', or 'bad'
+  });
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const ITEMS_PER_PAGE = 12;
 
   // Cache for search results
@@ -122,38 +134,51 @@ const SuperheroSearchPage = () => {
       // If no query is provided, do not fetch results
       return;
     }
-    const filterParams = new URLSearchParams(filters).toString();
-    const url = `http://localhost:8080/api/search?query=${query}&page=${page}&limit=${ITEMS_PER_PAGE}&${filterParams}`;
-
+  
+    // Destructure filters with default values if they don't exist
+    const { power = [0, 100], alignment = '' } = filters;
+  
+    // Construct the query string manually
+    const params = new URLSearchParams({
+      query: query,
+      page: page,
+      limit: ITEMS_PER_PAGE,
+      powerMin: power[0], // Minimum power value
+      powerMax: power[1], // Maximum power value
+      alignment: alignment || '' // If alignment is not provided, pass an empty string
+    });
+  
+    const url = `http://localhost:8080/api/search?${params.toString()}`;
+    
+    console.log('Search URL:', url);  // Debugging: log the URL to verify it's correct
+  
     // Check if data is already in cache
     if (cachedResults[query] && cachedResults[query][page] && cachedResults[query][page].filters === filters) {
       setSearchResults(cachedResults[query][page].results);
       setTotalPages(cachedResults[query][page].totalPages);
       return;
     }
-
+  
     try {
       setLoading(true);
-
+  
       const response = await fetch(url);
-      
+  
       if (!response.ok) {
         throw new Error("Failed to fetch search results");
       }
-
+  
       const data = await response.json();
-
+  
       // Combine the paginated results
       const combined = [
         ...(data.superheroes || []).map(hero => ({ ...hero, type: 'superhero' })),
         ...(data.movies || []).map(movie => ({ ...movie, type: 'movie' }))
       ];
-
-      // Update the state with new results
+  
       setSearchResults(combined);
       setTotalPages(data.totalPages);
-
-      // Update the cache with new results for the given query and page
+  
       setCachedResults((prevCache) => ({
         ...prevCache,
         [query]: {
@@ -165,7 +190,6 @@ const SuperheroSearchPage = () => {
           }
         }
       }));
-
     } catch (err) {
       console.error("Error fetching data:", err);
       setSearchResults([]);
@@ -177,7 +201,7 @@ const SuperheroSearchPage = () => {
 
   const handleSearch = async (query) => {
     setCurrentQuery(query);
-    setCurrentPage(1); // Reset to first page
+    setCurrentPage(1);
     await fetchResults(query, 1, filters);
   };
 
@@ -188,9 +212,25 @@ const SuperheroSearchPage = () => {
 
   const handleAdvancedSearch = (newFilters) => {
     setFilters(newFilters);
-    setCurrentPage(1); // Reset to first page when filters change
-    setShowAdvancedSearch(false); // Close the dialog after applying filters
+    setCurrentPage(1);
+    setShowAdvancedSearch(false);
     fetchResults(currentQuery, 1, newFilters);
+  };
+
+  // Handle power range changes
+  const handlePowerChange = (value) => {
+    setFilters(prevFilters => ({
+      ...prevFilters,
+      power: value
+    }));
+  };
+
+  // Handle alignment selection changes
+  const handleAlignmentChange = (alignment) => {
+    setFilters(prevFilters => ({
+      ...prevFilters,
+      alignment: alignment
+    }));
   };
 
   return (
@@ -209,11 +249,75 @@ const SuperheroSearchPage = () => {
 
         {/* Advanced Search Dialog */}
         <div className="mb-8 flex justify-center">
-          <AdvancedSearchDialog 
-            onAdvancedSearch={handleAdvancedSearch} 
-            isOpen={showAdvancedSearch} 
-            onClose={() => setShowAdvancedSearch(false)} 
-          />
+          <Dialog open={showAdvancedSearch} onOpenChange={setShowAdvancedSearch}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="inline-flex items-center space-x-2 bg-black text-white" onClick={() => setShowAdvancedSearch(true)}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                <span>Advanced Search</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl bg-white">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold text-black">Advanced Search Filters</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-6">
+                {/* Power Slider */}
+                <div className="flex flex-col space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-900">Power</span>
+                    <span className="text-sm text-gray-500">{filters.power[0]} - {filters.power[1]}</span>
+                  </div>
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={filters.power}
+                    onValueChange={handlePowerChange}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Alignment Select */}
+                <div className="flex flex-col space-y-2">
+                  <label className="text-sm font-medium text-gray-900">Alignment</label>
+                  <Select 
+                    value={filters.alignment}
+                    onValueChange={handleAlignmentChange}
+                  >
+                    <SelectTrigger className="w-full bg-white text-black border-black">
+                      <SelectValue placeholder="Select alignment" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white text-black border border-gray-300">
+                      {['bad', 'neutral', 'good'].map(align => (
+                        <SelectItem key={align} value={align} className="capitalize">
+                          {align}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setFilters({ power: [0, 100], alignment: '' })}
+                  className="w-full hover:bg-gray-100 bg-white text-black"
+                >
+                  Reset Filters
+                </Button>
+                <Button 
+                  onClick={() => handleAdvancedSearch(filters)} 
+                  className="w-full bg-primary hover:bg-primary/90"
+                >
+                  Apply Filters
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {loading ? (
