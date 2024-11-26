@@ -15,10 +15,11 @@ Project Directory Structure:
 │   ├── cache.go
 │   └── searchResponse.go
 ├── project_code.txt
-└── services/
-    ├── cache.go
-    ├── movie.go
-    └── superhero.go
+├── services/
+│   ├── cache.go
+│   ├── movie.go
+│   └── superhero.go
+└── vercel.json
 
 
 ==== Code Files ====

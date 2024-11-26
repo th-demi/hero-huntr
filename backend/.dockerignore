@@ -1,0 +1,5 @@
+# Ignore the vendor and build directories
+/vendor
+/build
+*.log
+.env
