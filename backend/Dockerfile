@@ -25,5 +25,6 @@ WORKDIR /root/
 # Copy the Go binary from the builder stage
 COPY --from=builder /app/myapp .
 COPY .env .env
+COPY handlers/hero_names.json handlers/hero_names.json
 # Run the binary
 CMD ["./myapp"]
