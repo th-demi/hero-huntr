@@ -1,0 +1,770 @@
+Project Directory Structure:
+./
+├── config/
+│   ├── mongo.go
+│   └── redis.go
+├── generate_code_snapshot.sh*
+├── go.mod
+├── go.sum
+├── handlers/
+│   ├── hero_names.json
+│   ├── search.go
+│   └── utils.go
+├── main.go
+├── models/
+│   ├── cache.go
+│   └── searchResponse.go
+├── project_code.txt
+└── services/
+    ├── cache.go
+    ├── movie.go
+    └── superhero.go
+
+
+==== Code Files ====
+
+
+==== File: ./config/mongo.go ====
+package config
+
+import (
+	"context"
+	"log"
+	"os"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+var Client *mongo.Client
+var MongoCtx = context.Background()
+
+// Initialize MongoDB
+func InitMongoDB() {
+	// Get MongoDB URI from environment variables
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		log.Fatal("MONGO_URI environment variable is not set")
+	}
+
+	clientOptions := options.Client().ApplyURI(mongoURI)
+	client, err := mongo.Connect(MongoCtx, clientOptions)
+	if err != nil {
+		log.Fatalf("Could not connect to MongoDB: %v", err)
+	}
+
+	Client = client
+
+	// Check the connection
+	err = client.Ping(MongoCtx, nil)
+	if err != nil {
+		log.Fatalf("Could not ping MongoDB: %v", err)
+	}
+}
+
+
+
+==== File: ./config/redis.go ====
+package config
+
+import (
+	"log"
+	"os"
+
+	"github.com/go-redis/redis/v8"
+)
+
+var Rdb *redis.Client
+
+// Initialize Redis
+func InitRedis() {
+	// Get Redis configuration from environment variables
+	redisHost := os.Getenv("REDIS_HOST")
+	redisPort := os.Getenv("REDIS_PORT")
+	redisPassword := os.Getenv("REDIS_PASSWORD") // Can be empty if no password is required
+
+	if redisHost == "" || redisPort == "" {
+		log.Fatal("REDIS_HOST or REDIS_PORT environment variable is not set")
+	}
+
+	// Initialize Redis client
+	Rdb = redis.NewClient(&redis.Options{
+		Addr:     redisHost + ":" + redisPort,
+		Password: redisPassword, // Default is no password
+		DB:       0,             // Default DB is 0
+	})
+
+	// Test Redis connection
+	_, err := Rdb.Ping(Rdb.Context()).Result()
+	if err != nil {
+		log.Fatalf("Could not connect to Redis: %v", err)
+	}
+
+	log.Println("Connected to Redis")
+}
+
+
+
+==== File: ./models/cache.go ====
+// models/cache.go
+
+package models
+
+// Superhero struct with name, image, power, and alignment
+type Superhero struct {
+	Name      string `json:"name"`
+	Image     string `json:"image"`
+	Power     string `json:"power"`     // Added Power field
+	Alignment string `json:"alignment"` // Added Alignment field
+}
+
+type Movie struct {
+	Title  string `json:"Title"`
+	Poster string `json:"Poster"`
+	Year   string `json:"Year"` // Added Year field
+}
+
+type CacheData struct {
+	Query       string      `json:"query"`
+	Superheroes []Superhero `json:"superheroes"`
+	Movies      []Movie     `json:"movies"`
+}
+
+
+
+==== File: ./models/searchResponse.go ====
+package models
+
+type SearchResponse struct {
+	Superheroes []Superhero `json:"superheroes"`
+	Movies      []Movie     `json:"movies"`
+	TotalPages  int         `json:"totalPages"`
+}
+
+
+
+==== File: ./handlers/search.go ====
+package handlers
+
+import (
+	"hero-hunter/config"
+	"hero-hunter/models"
+	"hero-hunter/services"
+	"log"
+	"math"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+// SearchHandler handles the search functionality
+func SearchHandler(c *gin.Context) {
+	// Get the query, page, and limit from the query parameters
+	query := c.DefaultQuery("query", "")
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "12")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 {
+		limit = 12
+	}
+
+	// Get the optional filters: powerMin, powerMax, and alignment
+	powerMinStr := c.DefaultQuery("powerMin", "")
+	powerMaxStr := c.DefaultQuery("powerMax", "")
+	alignment := c.DefaultQuery("alignment", "")
+
+	// Convert powerMin and powerMax to integers if provided
+	var powerMin, powerMax int
+	if powerMinStr != "" {
+		powerMin, err = strconv.Atoi(powerMinStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid powerMin value"})
+			return
+		}
+	}
+	if powerMaxStr != "" {
+		powerMax, err = strconv.Atoi(powerMaxStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid powerMax value"})
+			return
+		}
+	}
+
+	// Check Redis cache for the query
+	closestMatchQuery, found := services.GetCacheClosestMatch(query)
+	if found {
+		// If a closest match exists in Redis, update the query to the closest match
+		log.Printf("Found closest match in Redis for query '%s': %s", query, closestMatchQuery)
+		query = closestMatchQuery
+	}
+
+	// Check Redis cache for the query
+	cacheData, found := services.GetCacheData(query)
+	if found {
+		log.Println("Cache hit. Returning cached data.")
+		// Apply filters to the cached superheroes
+		filteredSuperheroes := filterSuperheroes(cacheData.Superheroes, powerMin, powerMax, alignment)
+		paginatedData := paginateCombined(filteredSuperheroes, cacheData.Movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(cacheData.Movies)
+		c.JSON(http.StatusOK, models.SearchResponse{
+			Superheroes: paginatedData.Superheroes,
+			Movies:      paginatedData.Movies,
+			TotalPages:  calculateTotalPages(totalItems, limit),
+		})
+		return
+	}
+
+	// Check MongoDB cache
+	collection := config.Client.Database("superheroDB").Collection("search_results")
+	var mongoData models.CacheData
+	err = collection.FindOne(config.MongoCtx, bson.M{"query": query}).Decode(&mongoData)
+	if err == nil {
+		log.Println("MongoDB hit. Returning data from MongoDB.")
+		services.SetCacheData(query, &mongoData)
+		// Apply filters to the MongoDB superheroes
+		filteredSuperheroes := filterSuperheroes(mongoData.Superheroes, powerMin, powerMax, alignment)
+		paginatedData := paginateCombined(filteredSuperheroes, mongoData.Movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(mongoData.Movies)
+		c.JSON(http.StatusOK, models.SearchResponse{
+			Superheroes: paginatedData.Superheroes,
+			Movies:      paginatedData.Movies,
+			TotalPages:  calculateTotalPages(totalItems, limit),
+		})
+		return
+	}
+
+	// If no superheroes found for the query, calculate Levenshtein distance
+	superheroes := services.FetchSuperheroes(query)
+	if len(superheroes) == 0 {
+		// Load superhero names from JSON file
+		superheroNames, err := loadSuperheroNames()
+		if err != nil {
+			log.Printf("Error loading superhero names: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error loading superhero names."})
+			return
+		}
+
+		// Find the closest match using Levenshtein distance
+		closestMatch := query
+		minDistance := math.MaxInt
+
+		for _, name := range superheroNames {
+			distance := LevenshteinDistance(query, name)
+			if distance < minDistance {
+				minDistance = distance
+				closestMatch = name
+			}
+		}
+
+		log.Printf("Closest match for query '%s': %s", query, closestMatch)
+
+		// Store the closest match in Redis with the actual query
+		services.SetCacheClosestMatch(query, closestMatch)
+
+		// Fetch superheroes and movies for the closest match
+		superheroes = services.FetchSuperheroes(closestMatch)
+		movies := services.FetchMovies(closestMatch)
+
+		// Apply filters to the superheroes
+		filteredSuperheroes := filterSuperheroes(superheroes, powerMin, powerMax, alignment)
+
+		// Save to cache
+		cacheData := &models.CacheData{
+			Query:       closestMatch,
+			Superheroes: filteredSuperheroes,
+			Movies:      movies,
+		}
+		services.SetCacheData(closestMatch, cacheData)
+
+		// Save to MongoDB
+		_, err = collection.InsertOne(config.MongoCtx, cacheData)
+		if err != nil {
+			log.Printf("Error inserting data into MongoDB: %v", err)
+		}
+
+		// Paginate the combined results
+		paginatedData := paginateCombined(filteredSuperheroes, movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(movies)
+		c.JSON(http.StatusOK, models.SearchResponse{
+			Superheroes: paginatedData.Superheroes,
+			Movies:      paginatedData.Movies,
+			TotalPages:  calculateTotalPages(totalItems, limit),
+		})
+		return
+	}
+
+	// If superheroes were found directly, proceed with paginating and returning the results
+	movies := services.FetchMovies(query)
+	if len(superheroes) > 0 || len(movies) > 0 {
+		// Apply filters to the superheroes
+		filteredSuperheroes := filterSuperheroes(superheroes, powerMin, powerMax, alignment)
+
+		cacheData := &models.CacheData{
+			Query:       query,
+			Superheroes: filteredSuperheroes,
+			Movies:      movies,
+		}
+
+		// Save to Redis cache
+		services.SetCacheData(query, cacheData)
+
+		// Save to MongoDB
+		_, err := collection.InsertOne(config.MongoCtx, cacheData)
+		if err != nil {
+			log.Printf("Error inserting data into MongoDB: %v", err)
+		}
+
+		// Paginate the combined results
+		paginatedData := paginateCombined(filteredSuperheroes, movies, page, limit)
+		totalItems := len(filteredSuperheroes) + len(movies)
+		c.JSON(http.StatusOK, models.SearchResponse{
+			Superheroes: paginatedData.Superheroes,
+			Movies:      paginatedData.Movies,
+			TotalPages:  calculateTotalPages(totalItems, limit),
+		})
+	} else {
+		c.JSON(http.StatusOK, models.SearchResponse{
+			Superheroes: nil,
+			Movies:      nil,
+			TotalPages:  0,
+		})
+	}
+}
+
+// filterSuperheroes filters the list of superheroes based on powerMin, powerMax, and alignment
+// filterSuperheroes filters the list of superheroes based on powerMin, powerMax, and alignment
+func filterSuperheroes(superheroes []models.Superhero, powerMin, powerMax int, alignment string) []models.Superhero {
+	var filtered []models.Superhero
+	for _, hero := range superheroes {
+		// Convert hero.Power to an integer (if it can be converted)
+		power, err := strconv.Atoi(hero.Power)
+		if err != nil {
+			// If conversion fails, skip this superhero or handle the error accordingly
+			log.Printf("Invalid power value for superhero '%s': %s", hero.Name, hero.Power)
+			continue
+		}
+
+		// Apply the filters
+		if (powerMin == 0 || power >= powerMin) && (powerMax == 0 || power <= powerMax) {
+			if alignment == "" || hero.Alignment == alignment {
+				filtered = append(filtered, hero)
+			}
+		}
+	}
+	return filtered
+}
+
+
+
+==== File: ./handlers/utils.go ====
+package handlers
+
+import (
+	"encoding/json"
+	"hero-hunter/models"
+	"math"
+	"os"
+)
+
+// LevenshteinDistance calculates the Levenshtein distance between two strings
+func LevenshteinDistance(a, b string) int {
+	lena, lenb := len(a), len(b)
+	dp := make([][]int, lena+1)
+
+	for i := range dp {
+		dp[i] = make([]int, lenb+1)
+	}
+
+	for i := 0; i <= lena; i++ {
+		dp[i][0] = i
+	}
+	for j := 0; j <= lenb; j++ {
+		dp[0][j] = j
+	}
+
+	for i := 1; i <= lena; i++ {
+		for j := 1; j <= lenb; j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			dp[i][j] = int(math.Min(
+				float64(dp[i-1][j-1]+cost),
+				math.Min(
+					float64(dp[i-1][j]+1),
+					float64(dp[i][j-1]+1),
+				),
+			))
+		}
+	}
+
+	return dp[lena][lenb]
+}
+
+// Load superhero names from hero_names.json
+func loadSuperheroNames() ([]string, error) {
+	file, err := os.ReadFile("./handlers/hero_names.json")
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	err = json.Unmarshal(file, &names)
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+// paginateCombined handles pagination for combined superhero and movie results
+func paginateCombined(superheroes []models.Superhero, movies []models.Movie, page, limit int) *models.CacheData {
+	// Create a combined slice of interfaces to handle both types
+	combined := make([]interface{}, 0, len(superheroes)+len(movies))
+
+	// Add all items to the combined slice
+	for _, hero := range superheroes {
+		combined = append(combined, hero)
+	}
+	for _, movie := range movies {
+		combined = append(combined, movie)
+	}
+
+	// Calculate start and end indices for the requested page
+	start := (page - 1) * limit
+	end := start + limit
+	if end > len(combined) {
+		end = len(combined)
+	}
+	if start >= len(combined) {
+		return &models.CacheData{
+			Superheroes: []models.Superhero{},
+			Movies:      []models.Movie{},
+		}
+	}
+
+	// Get the slice for the current page
+	pageSlice := combined[start:end]
+
+	// Separate back into superheroes and movies
+	var paginatedHeroes []models.Superhero
+	var paginatedMovies []models.Movie
+
+	for _, item := range pageSlice {
+		switch v := item.(type) {
+		case models.Superhero:
+			paginatedHeroes = append(paginatedHeroes, v)
+		case models.Movie:
+			paginatedMovies = append(paginatedMovies, v)
+		}
+	}
+
+	return &models.CacheData{
+		Superheroes: paginatedHeroes,
+		Movies:      paginatedMovies,
+	}
+}
+
+// calculateTotalPages calculates the total number of pages for pagination
+func calculateTotalPages(totalItems, limit int) int {
+	return (totalItems + limit - 1) / limit
+}
+
+
+
+==== File: ./main.go ====
+package main
+
+import (
+	"hero-hunter/config"
+	"hero-hunter/handlers"
+	"log"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	// Load environment variables from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	// Initialize configuration (Redis, MongoDB)
+	config.InitRedis()
+	config.InitMongoDB()
+
+	// Initialize Gin Router
+	router := gin.Default()
+
+	// Enable CORS with specific origin (for security, don't allow all origins in production)
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"}, // Allow the React app's origin
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
+	// Set up routes
+	router.GET("/api/search", handlers.SearchHandler)
+
+	// Run the server
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal("Failed to run server:", err)
+	}
+}
+
+
+
+==== File: ./services/cache.go ====
+package services
+
+import (
+	"context"
+	"encoding/json"
+	"hero-hunter/config"
+	"hero-hunter/models"
+	"log"
+	"time"
+
+	"github.com/go-redis/redis/v8" // Import this for redis.Nil
+)
+
+var ctx = context.Background()
+
+// GetCacheData fetches the cached data from Redis
+func GetCacheData(query string) (*models.CacheData, bool) {
+	cacheKey := "search:" + query
+	cachedResult, err := config.Rdb.Get(ctx, cacheKey).Result()
+	if err == redis.Nil {
+		// Cache miss
+		return nil, false
+	} else if err != nil {
+		log.Printf("Error fetching from cache: %v", err)
+		return nil, false
+	}
+
+	var cacheData models.CacheData
+	err = json.Unmarshal([]byte(cachedResult), &cacheData)
+	if err != nil {
+		log.Printf("Error unmarshalling cache data: %v", err)
+		return nil, false
+	}
+	return &cacheData, true
+}
+
+// SetCacheData saves the cache data to Redis
+func SetCacheData(query string, data *models.CacheData) {
+	cacheKey := "search:" + query
+	cacheDataJSON, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("Error marshalling cache data: %v", err)
+		return
+	}
+	config.Rdb.Set(ctx, cacheKey, string(cacheDataJSON), 10*time.Minute)
+}
+func GetCacheClosestMatch(query string) (string, bool) {
+	// Redis key for closest match
+	redisKey := "closest_match:" + query
+
+	// Fetch from Redis
+	val, err := config.Rdb.Get(context.Background(), redisKey).Result()
+	if err == redis.Nil {
+		// If the key doesn't exist in Redis
+		return "", false
+	} else if err != nil {
+		log.Printf("Error fetching from Redis: %v", err)
+		return "", false
+	}
+
+	// Return the closest match
+	return val, true
+}
+
+// SetCacheClosestMatch stores the closest match for the query in Redis
+func SetCacheClosestMatch(query, closestMatch string) error {
+	// Redis key for closest match
+	redisKey := "closest_match:" + query
+
+	// Store the closest match in Redis
+	err := config.Rdb.Set(context.Background(), redisKey, closestMatch, 24*time.Hour).Err()
+	if err != nil {
+		log.Printf("Error storing closest match in Redis: %v", err)
+		return err
+	}
+
+	// Successfully stored
+	return nil
+}
+
+
+
+==== File: ./services/movie.go ====
+// services/movie.go
+
+package services
+
+import (
+	"hero-hunter/models"
+	"log"
+	"os"
+
+	"github.com/go-resty/resty/v2"
+)
+
+func FetchMovies(query string) []models.Movie {
+	client := resty.New()
+
+	// Get the OMDB API key from environment variable
+	apiKey := os.Getenv("OMDB_API_KEY")
+	if apiKey == "" {
+		log.Fatal("OMDB_API_KEY is not set in the .env file")
+	}
+
+	// Construct the URLs for both movie and series searches
+	urlMovie := "http://www.omdbapi.com/?apikey=" + apiKey + "&s=" + query + "&type=movie"
+	urlSeries := "http://www.omdbapi.com/?apikey=" + apiKey + "&s=" + query + "&type=series"
+
+	// Create structs to hold the API responses
+	var resultMovie struct {
+		Response string `json:"Response"`
+		Search   []struct {
+			Title  string `json:"Title"`
+			Poster string `json:"Poster"` // Poster URL
+			Year   string `json:"Year"`   // Year of release
+		} `json:"Search"`
+	}
+	var resultSeries struct {
+		Response string `json:"Response"`
+		Search   []struct {
+			Title  string `json:"Title"`
+			Poster string `json:"Poster"` // Poster URL
+			Year   string `json:"Year"`   // Year of release
+		} `json:"Search"`
+	}
+
+	// Send the GET requests for both movies and series
+	_, errMovie := client.R().SetResult(&resultMovie).Get(urlMovie)
+	_, errSeries := client.R().SetResult(&resultSeries).Get(urlSeries)
+
+	// Handle any errors from the API request
+	if errMovie != nil {
+		log.Printf("Error fetching movie results: %v", errMovie)
+	}
+
+	if errSeries != nil {
+		log.Printf("Error fetching series results: %v", errSeries)
+	}
+
+	// Create a slice of movies and series with only Title, Poster URL, and Year
+	var combinedResults []models.Movie
+
+	if resultMovie.Response == "True" {
+		for _, movie := range resultMovie.Search {
+			combinedResults = append(combinedResults, models.Movie{
+				Title:  movie.Title,
+				Poster: movie.Poster, // Use the Poster URL from the API response
+				Year:   movie.Year,   // Use the Year from the API response
+			})
+		}
+	} else {
+		log.Printf("No movies found for query: %s", query)
+	}
+
+	if resultSeries.Response == "True" {
+		for _, series := range resultSeries.Search {
+			combinedResults = append(combinedResults, models.Movie{
+				Title:  series.Title,
+				Poster: series.Poster, // Use the Poster URL from the API response
+				Year:   series.Year,   // Use the Year from the API response
+			})
+		}
+	} else {
+		log.Printf("No series found for query: %s", query)
+	}
+
+	// Return the combined list of movies and series
+	return combinedResults
+}
+
+
+
+==== File: ./services/superhero.go ====
+package services
+
+import (
+	"hero-hunter/models"
+	"log"
+	"os"
+
+	"github.com/go-resty/resty/v2"
+)
+
+func FetchSuperheroes(query string) []models.Superhero {
+	client := resty.New()
+
+	// Get the access token from environment variable
+	accessToken := os.Getenv("SUPERHERO_API_ACCESS_TOKEN")
+	if accessToken == "" {
+		log.Fatal("SUPERHERO_API_ACCESS_TOKEN is not set in the .env file")
+	}
+
+	// Construct the URL to search for superheroes by name with the access token
+	url := "https://superheroapi.com/api/" + accessToken + "/search/" + query
+
+	// Create a struct to hold the API response
+	var result struct {
+		Response string `json:"response"`
+		Results  []struct {
+			ID         string `json:"id"`
+			Name       string `json:"name"`
+			Powerstats struct {
+				Power string `json:"power"` // Power as a string
+			} `json:"powerstats"`
+			Biography struct {
+				Alignment string `json:"alignment"` // Alignment as a string
+			} `json:"biography"`
+			Image struct {
+				URL string `json:"url"` // Nested struct to extract image URL
+			} `json:"image"`
+		} `json:"results"`
+	}
+
+	// Send the GET request and store the result in 'result'
+	_, err := client.R().
+		SetResult(&result). // Automatically unmarshals the JSON response into 'result'
+		Get(url)
+
+	if err != nil {
+		log.Printf("Error fetching superheroes: %v", err)
+		return nil
+	}
+
+	// Create a slice of Superheroes with name, image URL, power, and alignment
+	var superheroes []models.Superhero
+	if result.Response == "success" {
+		// Loop through the results and add the superhero name, image URL, power, and alignment
+		for _, hero := range result.Results {
+			superheroes = append(superheroes, models.Superhero{
+				Name:      hero.Name,
+				Image:     hero.Image.URL,           // Extract the image URL from the nested struct
+				Power:     hero.Powerstats.Power,    // Extract the 'power' from nested struct
+				Alignment: hero.Biography.Alignment, // Extract the 'alignment' from nested struct
+			})
+		}
+	}
+
+	return superheroes
+}
+
+
+
