@@ -9,6 +9,7 @@ COPY go.mod go.sum ./
 RUN go mod tidy
 COPY . .
 
+
 # Build the Go app
 RUN CGO_ENABLED=0 GOOS=linux go build -o myapp .
 
@@ -23,6 +24,6 @@ WORKDIR /root/
 
 # Copy the Go binary from the builder stage
 COPY --from=builder /app/myapp .
-
+COPY .env .env
 # Run the binary
 CMD ["./myapp"]
