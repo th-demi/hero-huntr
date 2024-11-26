@@ -1,31 +1,28 @@
-# Step 1: Build the Go application
-FROM golang:1.20-alpine as builder
+# Stage 1: Build the Go application
+FROM golang:1.23-alpine as builder
 
+# Set the current working directory in the container
 WORKDIR /app
 
-# Install dependencies
+# Copy the go modules and source code
 COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy the entire project
+RUN go mod tidy
 COPY . .
 
-# Build the Go binary
-RUN GOOS=linux GOARCH=amd64 go build -o main .
+# Build the Go app
+RUN CGO_ENABLED=0 GOOS=linux go build -o myapp .
 
-# Step 2: Create a small image to run the application
+# Stage 2: Create a lightweight image to run the app
 FROM alpine:latest
 
-WORKDIR /root/
-
-# Install necessary dependencies (like ca-certificates)
+# Install necessary certificates (for SSL, etc.)
 RUN apk --no-cache add ca-certificates
 
-# Copy the binary from the builder stage
-COPY --from=builder /app/main .
+# Set the working directory
+WORKDIR /root/
 
-# Expose the port (use the PORT environment variable in Railway)
-EXPOSE 8080
+# Copy the Go binary from the builder stage
+COPY --from=builder /app/myapp .
 
-# Start the app
-CMD ["./main"]
+# Run the binary
+CMD ["./myapp"]
