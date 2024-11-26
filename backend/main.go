@@ -27,7 +27,7 @@ func main() {
 
 	// Enable CORS with specific origin (for security, don't allow all origins in production)
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"https://hero-huntr.vercel.app/"}, // Allow the React app's origin
+		AllowOrigins:     []string{"https://hero-huntr.vercel.app/", "https://hero-huntr-9jlg0lpab-demis-projects-34d8549b.vercel.app/"}, // Allow the React app's origin
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
