@@ -156,7 +156,7 @@ const SuperheroSearchPage = () => {
       params.set('alignment', alignment);
     }
   
-    const url = `http://localhost:8080/api/search?${params.toString()}`;
+    const url = `https://hero-huntr-backend-production.up.railway.app/api/search?${params.toString()}`;
   
     console.log('Search URL:', url);  // Debugging: log the URL to verify it's correct
   
